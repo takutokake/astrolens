@@ -150,10 +150,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Main content */}
-      <main className="flex-1 md:pt-0 pt-14 overflow-auto">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {children}
-        </div>
+      <main className="flex-1 md:pt-0 pt-14 overflow-hidden flex flex-col">
+        {pathname === "/app" ? (
+          <div className="flex-1 overflow-hidden">{children}</div>
+        ) : (
+          <div className="flex-1 overflow-auto">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              {children}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

@@ -1,35 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { fetchNewsForUser } from "@/lib/news";
+import { createServiceClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { User } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("=== /api/news called ===");
     const supabase = await createClient();
     const {
       data: { user: authUser },
     } = await supabase.auth.getUser();
 
     if (!authUser) {
-      console.error("❌ No auth user");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    console.log("✅ Auth user:", authUser.id);
 
     // Rate limit
     const { allowed } = await checkRateLimit(authUser.id, "/api/news");
     if (!allowed) {
-      console.error("❌ Rate limit exceeded");
       return NextResponse.json(
         { error: "Rate limit exceeded" },
         { status: 429 }
       );
     }
-
-    console.log("✅ Rate limit passed");
 
     // Get user preferences
     const { data: userData, error: userError } = await supabase
@@ -39,7 +32,6 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (userError || !userData) {
-      console.error("❌ User profile error:", userError);
       return NextResponse.json(
         { error: "User profile not found", details: userError },
         { status: 404 }
@@ -47,26 +39,42 @@ export async function GET(request: NextRequest) {
     }
 
     const user = userData as User;
-    console.log("✅ User profile loaded, categories:", user.categories);
 
     // Optional category override from query params
     const { searchParams } = new URL(request.url);
     const categoryParam = searchParams.get("categories");
-    const overrideCategories = categoryParam
+    const categories = categoryParam
       ? categoryParam.split(",")
-      : undefined;
+      : user.categories;
 
-    console.log("📰 Fetching articles...");
-    const articles = await fetchNewsForUser(user, overrideCategories);
-    console.log(`✅ Fetched ${articles.length} articles`);
+    if (!categories || categories.length === 0) {
+      return NextResponse.json({ articles: [] });
+    }
 
-    return NextResponse.json({ articles });
+    // Read directly from Supabase — articles are populated by the hourly cron
+    const serviceClient = await createServiceClient();
+    const { data: articles, error: fetchError } = await serviceClient
+      .from("articles")
+      .select("*")
+      .in("category", categories)
+      .order("published_at", { ascending: false })
+      .limit(50);
+
+    if (fetchError) {
+      console.error("❌ Error reading articles from Supabase:", fetchError);
+      return NextResponse.json(
+        { error: "Failed to fetch articles" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ articles: articles || [] });
   } catch (error) {
     console.error("❌ Exception in /api/news:", error);
     return NextResponse.json(
-      { 
+      {
         error: "Internal server error",
-        details: error instanceof Error ? error.message : String(error)
+        details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     );

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { fetchNewsForUser, deduplicateArticles, trimToWordCount } from "@/lib/news";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { deduplicateArticles, trimToWordCount } from "@/lib/news";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { digestRequestSchemaRefined } from "@/lib/validations";
 import { getTargetWordCount } from "@/lib/types";
-import type { User, Duration } from "@/lib/types";
+import type { Article, User, Duration } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,14 +55,17 @@ export async function POST(request: NextRequest) {
 
     const user = userData as User;
 
-    // Fetch news for the requested categories
-    const rawArticles = await fetchNewsForUser(
-      { ...user, include_local: include_local ?? user.include_local },
-      categories
-    );
+    // Read cached articles from Supabase (populated by hourly cron)
+    const serviceClient = await createServiceClient();
+    const { data: rawArticles } = await serviceClient
+      .from("articles")
+      .select("*")
+      .in("category", categories)
+      .order("published_at", { ascending: false })
+      .limit(50);
 
     // Deduplicate
-    const unique = deduplicateArticles(rawArticles);
+    const unique = deduplicateArticles((rawArticles as Article[]) || []);
 
     // Trim to target word count
     const targetWords = getTargetWordCount(duration as Duration);

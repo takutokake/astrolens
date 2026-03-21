@@ -56,27 +56,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ audio_url: digest.audio_url });
     }
 
-    // Fetch articles for this digest
     const serviceClient = await createServiceClient();
-    const { data: articles } = await serviceClient
-      .from("articles")
-      .select("*")
-      .in("id", digest.article_ids);
 
-    if (!articles || articles.length === 0) {
+    // Get or generate radio script
+    let radioScript = digest.radio_script;
+    
+    if (!radioScript) {
+      // Generate radio script first
+      const scriptRes = await fetch(
+        `${request.nextUrl.origin}/api/generate-radio-script`,
+        {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Cookie": request.headers.get("cookie") || "",
+          },
+          body: JSON.stringify({ digest_id }),
+        }
+      );
+
+      if (!scriptRes.ok) {
+        return NextResponse.json(
+          { error: "Failed to generate radio script" },
+          { status: 500 }
+        );
+      }
+
+      const scriptData = await scriptRes.json();
+      radioScript = scriptData.radio_script;
+    }
+
+    if (!radioScript) {
       return NextResponse.json(
-        { error: "No articles found for this digest" },
-        { status: 404 }
+        { error: "No radio script available" },
+        { status: 500 }
       );
     }
 
-    // Build text body for TTS
-    const textBody = (articles as Article[])
-      .map(
-        (article, i) =>
-          `Story ${i + 1}. ${article.title}. ${article.description || ""}`
-      )
-      .join(" ... Next story. ... ");
+    // Use radio script for TTS
+    const textBody = radioScript;
 
     // Call Google Cloud TTS
     const apiKey = process.env.GOOGLE_TTS_API_KEY;

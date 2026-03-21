@@ -55,6 +55,7 @@ export interface Digest {
   article_ids: string[];
   word_count: number;
   audio_url: string | null;
+  radio_script: string | null;
   created_at: string;
 }
 

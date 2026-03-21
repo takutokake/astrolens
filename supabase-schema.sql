@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS digests (
   article_ids UUID[],
   word_count INTEGER,
   audio_url TEXT,
+  radio_script TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

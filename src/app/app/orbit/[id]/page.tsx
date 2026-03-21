@@ -27,11 +27,14 @@ export default function DigestViewPage() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [radioScript, setRadioScript] = useState<string | null>(null);
+  const [generatingScript, setGeneratingScript] = useState(false);
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1.0);
+  const [showScript, setShowScript] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -44,6 +47,7 @@ export default function DigestViewPage() {
           setDigest(data.digest);
           setArticles(data.articles || []);
           setAudioUrl(data.digest.audio_url || null);
+          setRadioScript(data.digest.radio_script || null);
           setLoading(false);
           sessionStorage.removeItem("currentDigest");
           return;
@@ -61,10 +65,29 @@ export default function DigestViewPage() {
         if (found) {
           setDigest(found);
           setAudioUrl(found.audio_url || null);
+          setRadioScript(found.radio_script || null);
         }
         setLoading(false);
       });
   }, [digestId]);
+
+  const handleGenerateScript = async () => {
+    setGeneratingScript(true);
+    try {
+      const res = await fetch("/api/generate-radio-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ digest_id: digestId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRadioScript(data.radio_script);
+      }
+    } catch (err) {
+      console.error("Script generation error:", err);
+    }
+    setGeneratingScript(false);
+  };
 
   const handleGenerateAudio = async () => {
     setGeneratingAudio(true);
@@ -163,6 +186,51 @@ export default function DigestViewPage() {
             .join(", ")}
         </p>
       </div>
+
+      {/* Radio Script Section */}
+      {!radioScript && !generatingScript && (
+        <div className="mb-6">
+          <Button
+            onClick={handleGenerateScript}
+            className="gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white"
+          >
+            <Volume2 className="h-4 w-4" />
+            Generate Radio Script
+          </Button>
+          <p className="text-xs text-slate-500 mt-2">
+            AI will create a natural, radio-style narration with smooth transitions
+          </p>
+        </div>
+      )}
+
+      {generatingScript && (
+        <div className="mb-6 p-4 rounded-xl bg-blue-500/5 border border-blue-500/10 flex items-center gap-3">
+          <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
+          <div>
+            <p className="text-white text-sm font-medium">Generating radio script...</p>
+            <p className="text-slate-400 text-xs">AI is crafting your personalized news broadcast</p>
+          </div>
+        </div>
+      )}
+
+      {radioScript && (
+        <div className="mb-6">
+          <button
+            onClick={() => setShowScript(!showScript)}
+            className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors mb-3"
+          >
+            <Volume2 className="h-4 w-4" />
+            {showScript ? "Hide" : "Show"} Radio Script
+          </button>
+          {showScript && (
+            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 max-h-96 overflow-y-auto">
+              <pre className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+                {radioScript}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Audio player */}
       {audioUrl ? (
