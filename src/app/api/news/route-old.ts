@@ -40,13 +40,6 @@ export async function GET(request: NextRequest) {
 
     const user = userData as User;
 
-    // Debug logging
-    console.log(`📊 User preferences:`, {
-      keywords: user.keywords,
-      languages: user.languages,
-      categories: user.categories
-    });
-
     // Optional category override from query params
     const { searchParams } = new URL(request.url);
     const categoryParam = searchParams.get("categories");
@@ -65,7 +58,7 @@ export async function GET(request: NextRequest) {
       .select("*")
       .in("category", categories)
       .order("published_at", { ascending: false })
-      .limit(100); // Fetch more to allow for keyword prioritization
+      .limit(50);
 
     if (fetchError) {
       console.error("❌ Error reading articles from Supabase:", fetchError);
@@ -75,40 +68,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let finalArticles = articles || [];
-
-    // KEYWORD PRIORITIZATION: Articles matching keywords appear first
-    if (user.keywords && user.keywords.length > 0) {
-      console.log(`🔍 Checking ${finalArticles.length} articles for keywords:`, user.keywords);
-      
-      const keywordMatches: typeof articles = [];
-      const nonMatches: typeof articles = [];
-
-      finalArticles.forEach((article) => {
-        const searchText = `${article.title} ${article.description} ${article.content || ""}`.toLowerCase();
-        const hasKeyword = user.keywords.some((keyword: string) =>
-          searchText.includes(keyword.toLowerCase())
-        );
-
-        if (hasKeyword) {
-          keywordMatches.push(article);
-          console.log(`✅ Match found: "${article.title.substring(0, 60)}..."`);
-        } else {
-          nonMatches.push(article);
-        }
-      });
-
-      // Prioritize keyword matches first, then regular articles
-      finalArticles = [...keywordMatches, ...nonMatches];
-      console.log(`✨ Prioritized ${keywordMatches.length} keyword-matched articles out of ${finalArticles.length} total`);
-    } else {
-      console.log(`⚠️ No keywords set for user - showing articles by recency only`);
-    }
-
-    // Limit to 50 articles
-    finalArticles = finalArticles.slice(0, 50);
-
-    return NextResponse.json({ articles: finalArticles });
+    return NextResponse.json({ articles: articles || [] });
   } catch (error) {
     console.error("❌ Exception in /api/news:", error);
     return NextResponse.json(

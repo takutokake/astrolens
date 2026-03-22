@@ -23,7 +23,6 @@ import {
   Leaf,
   UtensilsCrossed,
   History,
-  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -188,29 +187,21 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* Keywords - Priority Topics */}
+      {/* Keywords */}
       <section className="mb-8">
-        <div className="p-4 rounded-lg bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 mb-3">
-          <h2 className="text-sm font-medium text-white uppercase tracking-wider mb-2 flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-amber-400" />
-            Priority Keywords
-            <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 text-xs font-bold">NEW</span>
-          </h2>
-          <p className="text-xs text-amber-200/80 mb-3">
-            <strong>Articles matching these keywords appear FIRST</strong> in your "Your Sky" feed, ignoring recency order.
-            Perfect for tracking specific topics, people, or events you care about most.
-          </p>
-          <input
-            type="text"
-            value={keywords}
-            onChange={(e) => setKeywords(e.target.value)}
-            placeholder="e.g., AI, Lakers, climate change, Elon Musk, Bitcoin"
-            className="w-full h-10 px-4 rounded-lg bg-[#0f172a] border border-amber-500/30 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-sm"
-          />
-          <p className="text-xs text-amber-300/60 mt-2">
-            💡 Separate multiple keywords with commas. Articles matching ANY keyword will be prioritized.
-          </p>
-        </div>
+        <h2 className="text-sm font-medium text-slate-300 uppercase tracking-wider mb-2">
+          Keywords (Optional)
+        </h2>
+        <p className="text-xs text-slate-500 mb-2">
+          Leave empty for broader results. Add specific terms to narrow focus (e.g. AI, Lakers, startups)
+        </p>
+        <input
+          type="text"
+          value={keywords}
+          onChange={(e) => setKeywords(e.target.value)}
+          placeholder="Leave empty or: AI, startups, climate"
+          className="w-full h-10 px-4 rounded-lg bg-[#0f172a] border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-sm"
+        />
       </section>
 
       {/* Region & Language */}
@@ -234,9 +225,6 @@ export default function SettingsPage() {
           <h2 className="text-sm font-medium text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
             <Languages className="h-3.5 w-3.5" /> Language
           </h2>
-          <p className="text-xs text-slate-500 mb-2">
-            Articles will be fetched in this language
-          </p>
           <select
             value={languages}
             onChange={(e) => setLanguages(e.target.value)}
@@ -252,16 +240,6 @@ export default function SettingsPage() {
             <option value="zh">Chinese</option>
             <option value="ar">Arabic</option>
           </select>
-        </div>
-      </section>
-
-      {/* Translation Note */}
-      <section className="mb-8">
-        <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
-          <p className="text-xs text-blue-300/80">
-            <strong>📝 Translation:</strong> Articles are fetched in your selected language. For translation to other languages, 
-            we recommend using your browser's built-in translation feature (right-click → Translate) or third-party extensions.
-          </p>
         </div>
       </section>
 
