@@ -28,7 +28,6 @@ export default function DigestViewPage() {
   const [loading, setLoading] = useState(true);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [radioScript, setRadioScript] = useState<string | null>(null);
-  const [generatingScript, setGeneratingScript] = useState(false);
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -71,24 +70,6 @@ export default function DigestViewPage() {
       });
   }, [digestId]);
 
-  const handleGenerateScript = async () => {
-    setGeneratingScript(true);
-    try {
-      const res = await fetch("/api/generate-radio-script", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ digest_id: digestId }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setRadioScript(data.radio_script);
-      }
-    } catch (err) {
-      console.error("Script generation error:", err);
-    }
-    setGeneratingScript(false);
-  };
-
   const handleGenerateAudio = async () => {
     setGeneratingAudio(true);
     try {
@@ -100,6 +81,18 @@ export default function DigestViewPage() {
       if (res.ok) {
         const data = await res.json();
         setAudioUrl(data.audio_url);
+        
+        // Fetch the updated digest to get the radio script
+        const digestRes = await fetch("/api/digest");
+        if (digestRes.ok) {
+          const digestData = await digestRes.json();
+          const updatedDigest = digestData.digests?.find(
+            (d: any) => d.id === digestId
+          );
+          if (updatedDigest?.radio_script) {
+            setRadioScript(updatedDigest.radio_script);
+          }
+        }
       }
     } catch (err) {
       console.error("TTS error:", err);
@@ -187,32 +180,7 @@ export default function DigestViewPage() {
         </p>
       </div>
 
-      {/* Radio Script Section */}
-      {!radioScript && !generatingScript && (
-        <div className="mb-6">
-          <Button
-            onClick={handleGenerateScript}
-            className="gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white"
-          >
-            <Volume2 className="h-4 w-4" />
-            Generate Radio Script
-          </Button>
-          <p className="text-xs text-slate-500 mt-2">
-            AI will create a natural, radio-style narration with smooth transitions
-          </p>
-        </div>
-      )}
-
-      {generatingScript && (
-        <div className="mb-6 p-4 rounded-xl bg-blue-500/5 border border-blue-500/10 flex items-center gap-3">
-          <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
-          <div>
-            <p className="text-white text-sm font-medium">Generating radio script...</p>
-            <p className="text-slate-400 text-xs">AI is crafting your personalized news broadcast</p>
-          </div>
-        </div>
-      )}
-
+      {/* Radio Script Preview (if available) */}
       {radioScript && (
         <div className="mb-6">
           <button
@@ -232,7 +200,7 @@ export default function DigestViewPage() {
         </div>
       )}
 
-      {/* Audio player */}
+      {/* Audio player or Generate button */}
       {audioUrl ? (
         <div className="mb-8 p-5 rounded-xl bg-gradient-to-r from-blue-500/5 to-emerald-500/5 border border-blue-500/10">
           <audio
@@ -313,15 +281,18 @@ export default function DigestViewPage() {
             {generatingAudio ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Generating audio...
+                Generating radio broadcast...
               </>
             ) : (
               <>
                 <Headphones className="h-4 w-4" />
-                Generate Audio
+                Generate Radio Broadcast
               </>
             )}
           </Button>
+          <p className="text-xs text-slate-500 mt-2">
+            AI will create a radio script and convert it to audio (takes ~30-60 seconds)
+          </p>
         </div>
       )}
 

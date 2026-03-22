@@ -14,6 +14,7 @@ import {
   ChevronUp,
   ChevronDown,
   BookmarkCheck,
+  RefreshCw,
 } from "lucide-react";
 
 export default function YourSkyPage() {
@@ -31,7 +32,8 @@ export default function YourSkyPage() {
   const fetchArticles = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/news");
+      // Add cache-busting timestamp to always get fresh data
+      const res = await fetch(`/api/news?t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         setArticles(data.articles || []);
@@ -57,7 +59,19 @@ export default function YourSkyPage() {
         if (profile) setUser(profile as User);
       }
     });
+    // Fetch latest articles from database
     fetchArticles();
+  }, [fetchArticles]);
+
+  // Refresh articles when user navigates back to this page
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchArticles();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [fetchArticles]);
 
   const goTo = useCallback(
@@ -225,6 +239,13 @@ export default function YourSkyPage() {
             <p className="text-slate-400 text-sm mb-6">
               News is fetched hourly. Check back soon or try different categories.
             </p>
+            <button
+              onClick={fetchArticles}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors mb-3"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh Feed
+            </button>
             <a
               href="/app/settings"
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-medium transition-colors"
@@ -241,6 +262,16 @@ export default function YourSkyPage() {
 
   return (
     <div ref={containerRef} className="h-full relative overflow-hidden bg-[#020617] select-none">
+      {/* Floating refresh button */}
+      <button
+        onClick={fetchArticles}
+        disabled={loading}
+        className="absolute top-4 right-4 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/10 transition-all group"
+        title="Refresh feed"
+      >
+        <RefreshCw className={`h-5 w-5 text-white ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+      </button>
+
       {/* Main article display */}
       <AnimatePresence mode="wait">
         <motion.div
