@@ -4,15 +4,12 @@ import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
 import type { Article, User } from "@/lib/types";
 import { CATEGORY_LABELS, type Category } from "@/lib/types";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   ExternalLink,
   Bookmark,
   Share2,
   Clock,
   Loader2,
-  ChevronUp,
-  ChevronDown,
   BookmarkCheck,
   RefreshCw,
 } from "lucide-react";
@@ -26,13 +23,11 @@ export default function YourSkyPage() {
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
-  const isScrolling = useRef(false);
-  const touchStartY = useRef(0);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const fetchArticles = useCallback(async () => {
     setLoading(true);
     try {
-      // Add cache-busting timestamp to always get fresh data
       const res = await fetch(`/api/news?t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
@@ -59,11 +54,10 @@ export default function YourSkyPage() {
         if (profile) setUser(profile as User);
       }
     });
-    // Fetch latest articles from database
     fetchArticles();
   }, [fetchArticles]);
 
-  // Refresh articles when user navigates back to this page
+  // Refresh when user returns to page
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -74,66 +68,62 @@ export default function YourSkyPage() {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [fetchArticles]);
 
-  const goTo = useCallback(
-    (index: number) => {
-      if (isScrolling.current) return;
-      if (index < 0 || index >= articles.length) return;
-      isScrolling.current = true;
-      setCurrentIndex(index);
-      setTimeout(() => {
-        isScrolling.current = false;
-      }, 500);
-    },
-    [articles.length]
-  );
+  // Scroll snap detection - track which article is active
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-  const goNext = useCallback(() => goTo(currentIndex + 1), [currentIndex, goTo]);
-  const goPrev = useCallback(() => goTo(currentIndex - 1), [currentIndex, goTo]);
+    const handleScroll = () => {
+      if (scrollTimeout.current) {
+        clearTimeout(scrollTimeout.current);
+      }
+
+      scrollTimeout.current = setTimeout(() => {
+        const scrollTop = container.scrollTop;
+        const clientHeight = container.clientHeight;
+        const newIndex = Math.round(scrollTop / clientHeight);
+        
+        if (newIndex !== currentIndex && newIndex >= 0 && newIndex < articles.length) {
+          setCurrentIndex(newIndex);
+        }
+      }, 100);
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (scrollTimeout.current) {
+        clearTimeout(scrollTimeout.current);
+      }
+    };
+  }, [currentIndex, articles.length]);
 
   // Keyboard navigation
   useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowDown" || e.key === "j") goNext();
-      if (e.key === "ArrowUp" || e.key === "k") goPrev();
+      if (e.key === "ArrowDown" || e.key === "j") {
+        e.preventDefault();
+        const nextIndex = Math.min(currentIndex + 1, articles.length - 1);
+        container.scrollTo({
+          top: nextIndex * container.clientHeight,
+          behavior: 'smooth'
+        });
+      }
+      if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        const prevIndex = Math.max(currentIndex - 1, 0);
+        container.scrollTo({
+          top: prevIndex * container.clientHeight,
+          behavior: 'smooth'
+        });
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [goNext, goPrev]);
-
-  // Mouse wheel navigation
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      if (Math.abs(e.deltaY) < 30) return;
-      if (e.deltaY > 0) goNext();
-      else goPrev();
-    };
-    container.addEventListener("wheel", handleWheel, { passive: false });
-    return () => container.removeEventListener("wheel", handleWheel);
-  }, [goNext, goPrev]);
-
-  // Touch swipe navigation
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartY.current = e.touches[0].clientY;
-    };
-    const handleTouchEnd = (e: TouchEvent) => {
-      const diff = touchStartY.current - e.changedTouches[0].clientY;
-      if (Math.abs(diff) < 50) return;
-      if (diff > 0) goNext();
-      else goPrev();
-    };
-    container.addEventListener("touchstart", handleTouchStart, { passive: true });
-    container.addEventListener("touchend", handleTouchEnd, { passive: true });
-    return () => {
-      container.removeEventListener("touchstart", handleTouchStart);
-      container.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, [goNext, goPrev]);
+  }, [currentIndex, articles.length]);
 
   const handleSave = async (articleId: string) => {
     if (savedIds.has(articleId)) return;
@@ -258,199 +248,182 @@ export default function YourSkyPage() {
     );
   }
 
-  const article = articles[currentIndex];
-
   return (
-    <div ref={containerRef} className="h-full relative overflow-hidden bg-[#020617] select-none">
-      {/* Floating refresh button */}
-      <button
-        onClick={fetchArticles}
-        disabled={loading}
-        className="absolute top-4 right-4 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/10 transition-all group"
-        title="Refresh feed"
+    <>
+      {/* Hide scrollbar with global styles */}
+      <style jsx global>{`
+        .scroll-snap-container::-webkit-scrollbar {
+          display: none;
+        }
+        .scroll-snap-container {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+      `}</style>
+
+      <div 
+        ref={containerRef}
+        className="scroll-snap-container h-screen overflow-y-scroll bg-[#020617]"
+        style={{
+          scrollSnapType: 'y mandatory',
+          WebkitOverflowScrolling: 'touch',
+        }}
       >
-        <RefreshCw className={`h-5 w-5 text-white ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
-      </button>
-
-      {/* Main article display */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={article.id}
-          initial={{ opacity: 0, y: 60 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -60 }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-          className="absolute inset-0 flex flex-col"
+        {/* Floating refresh button */}
+        <button
+          onClick={fetchArticles}
+          disabled={loading}
+          className="fixed top-4 left-4 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/10 transition-all group"
+          title="Refresh feed"
         >
-          {/* Image section — top 50% */}
-          <div className="relative w-full flex-1 min-h-0" style={{ flex: "1 1 50%" }}>
-            {article.image_url && !imgErrors.has(article.id) ? (
-              <Image
-                src={article.image_url}
-                alt={article.title}
-                fill
-                className="object-cover"
-                sizes="100vw"
-                priority={currentIndex < 3}
-                onError={() =>
-                  setImgErrors((prev) => new Set(prev).add(article.id))
-                }
-              />
-            ) : (
-              <div
-                className={`absolute inset-0 bg-gradient-to-br ${getCategoryGradient(article.category)} flex items-center justify-center`}
-              >
-                <span className="text-8xl opacity-20">
-                  {article.category === "technology"
-                    ? "⚡"
-                    : article.category === "sports"
-                      ? "🏆"
-                      : article.category === "entertainment"
-                        ? "🎬"
-                        : article.category === "science"
-                          ? "🔬"
-                          : article.category === "health"
-                            ? "❤️"
-                            : article.category === "business"
-                              ? "📈"
-                              : article.category === "politics"
-                                ? "🏛️"
-                                : article.category === "environment"
-                                  ? "🌍"
-                                  : article.category === "food"
-                                    ? "🍽️"
-                                    : "📰"}
-                </span>
-              </div>
-            )}
-            {/* Gradient overlay on image */}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-[#020617]" />
+          <RefreshCw className={`h-5 w-5 text-white ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+        </button>
 
-            {/* Top bar: counter + source */}
-            <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-1 rounded-full bg-black/50 backdrop-blur-md text-white text-xs font-medium">
-                  {currentIndex + 1} / {articles.length}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-1 rounded-full bg-black/50 backdrop-blur-md text-slate-300 text-xs flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {timeAgo(article.published_at)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Content section — bottom 50% */}
+        {/* Articles - each is a full-screen snap point */}
+        {articles.map((article, index) => (
           <div
-            className="relative z-10 px-5 pb-5 pt-4 flex flex-col justify-between"
-            style={{ flex: "1 1 50%" }}
+            key={article.id}
+            className="h-screen w-full relative flex flex-col"
+            style={{
+              scrollSnapAlign: 'start',
+              scrollSnapStop: 'always',
+            }}
           >
-            {/* Category + Source */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold uppercase tracking-wide">
-                  {CATEGORY_LABELS[article.category as Category] || article.category}
-                </span>
-                <span className="text-slate-500 text-xs">•</span>
-                <span className="text-slate-400 text-xs font-medium truncate">
-                  {article.source_name}
-                </span>
+            {/* Image section — top 50% */}
+            <div className="relative w-full flex-1 min-h-0" style={{ flex: "1 1 50%" }}>
+              {article.image_url && !imgErrors.has(article.id) ? (
+                <Image
+                  src={article.image_url}
+                  alt={article.title}
+                  fill
+                  className="object-cover"
+                  sizes="100vw"
+                  priority={index < 3}
+                  onError={() =>
+                    setImgErrors((prev) => new Set(prev).add(article.id))
+                  }
+                />
+              ) : (
+                <div
+                  className={`absolute inset-0 bg-gradient-to-br ${getCategoryGradient(article.category)} flex items-center justify-center`}
+                >
+                  <span className="text-8xl opacity-20">
+                    {article.category === "technology"
+                      ? "⚡"
+                      : article.category === "sports"
+                        ? "🏆"
+                        : article.category === "entertainment"
+                          ? "🎬"
+                          : article.category === "science"
+                            ? "🔬"
+                            : article.category === "health"
+                              ? "❤️"
+                              : article.category === "business"
+                                ? "📈"
+                                : article.category === "politics"
+                                  ? "🏛️"
+                                  : article.category === "environment"
+                                    ? "🌍"
+                                    : article.category === "food"
+                                      ? "🍽️"
+                                      : "📰"}
+                  </span>
+                </div>
+              )}
+              
+              {/* Dark overlay gradient for text readability */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+
+              {/* Top bar: counter + time */}
+              <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-full bg-black/50 backdrop-blur-md text-white text-xs font-medium">
+                    {index + 1} / {articles.length}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-full bg-black/50 backdrop-blur-md text-slate-300 text-xs flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {timeAgo(article.published_at)}
+                  </span>
+                </div>
               </div>
 
-              {/* Title */}
-              <h2 className="text-white text-xl sm:text-2xl font-bold leading-tight mb-3 line-clamp-3">
-                {article.title}
-              </h2>
+              {/* Side action buttons - TikTok style */}
+              <div className="absolute right-3 bottom-20 flex flex-col gap-4 z-20">
+                <button
+                  onClick={() => handleSave(article.id)}
+                  disabled={savingIds.has(article.id)}
+                  className="flex flex-col items-center gap-1 group"
+                >
+                  <div className="p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-all">
+                    {savedIds.has(article.id) ? (
+                      <BookmarkCheck className="h-6 w-6 text-blue-400" />
+                    ) : (
+                      <Bookmark className="h-6 w-6 text-white group-hover:text-blue-400 transition-colors" />
+                    )}
+                  </div>
+                  <span className="text-white text-xs font-medium">
+                    {savedIds.has(article.id) ? 'Saved' : 'Save'}
+                  </span>
+                </button>
 
-              {/* Description */}
-              <p className="text-slate-400 text-sm sm:text-base leading-relaxed line-clamp-4">
-                {article.description}
-              </p>
+                <button
+                  onClick={() => handleShare(article)}
+                  className="flex flex-col items-center gap-1 group"
+                >
+                  <div className="p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-all">
+                    <Share2 className="h-6 w-6 text-white group-hover:text-green-400 transition-colors" />
+                  </div>
+                  <span className="text-white text-xs font-medium">Share</span>
+                </button>
+              </div>
             </div>
 
-            {/* Bottom actions */}
-            <div className="flex items-center gap-3 mt-4 pt-4 border-t border-white/5">
-              <a
-                href={article.article_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
-              >
-                <ExternalLink className="h-4 w-4" />
-                Read Full Article
-              </a>
+            {/* Content section — bottom 50% */}
+            <div
+              className="relative z-10 px-5 pb-5 pt-4 flex flex-col justify-between"
+              style={{ flex: "1 1 50%" }}
+            >
+              {/* Category + Source */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold uppercase tracking-wide">
+                    {CATEGORY_LABELS[article.category as Category] || article.category}
+                  </span>
+                  <span className="text-slate-500 text-xs">•</span>
+                  <span className="text-slate-400 text-xs font-medium truncate">
+                    {article.source_name}
+                  </span>
+                </div>
 
-              <button
-                onClick={() => handleSave(article.id)}
-                disabled={savingIds.has(article.id)}
-                className={`p-2.5 rounded-xl transition-all ${
-                  savedIds.has(article.id)
-                    ? "bg-amber-500/20 text-amber-400"
-                    : "bg-white/5 hover:bg-white/10 text-slate-400 hover:text-amber-400"
-                }`}
-                title="Save article"
-              >
-                {savingIds.has(article.id) ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : savedIds.has(article.id) ? (
-                  <BookmarkCheck className="h-5 w-5" />
-                ) : (
-                  <Bookmark className="h-5 w-5" />
-                )}
-              </button>
+                {/* Title */}
+                <h2 className="text-white text-xl sm:text-2xl font-bold leading-tight mb-3 line-clamp-3">
+                  {article.title}
+                </h2>
 
-              <button
-                onClick={() => handleShare(article)}
-                className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-blue-400 transition-all"
-                title="Share"
-              >
-                <Share2 className="h-5 w-5" />
-              </button>
+                {/* Description */}
+                <p className="text-slate-400 text-sm sm:text-base leading-relaxed line-clamp-4">
+                  {article.description}
+                </p>
+              </div>
+
+              {/* Bottom actions */}
+              <div className="flex items-center gap-3 mt-4 pt-4 border-t border-white/5">
+                <a
+                  href={article.article_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Read Full Article
+                </a>
+              </div>
             </div>
           </div>
-        </motion.div>
-      </AnimatePresence>
-
-      {/* Right side: progress dots */}
-      <div className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex flex-col items-center gap-1.5">
-        {articles.slice(
-          Math.max(0, currentIndex - 4),
-          Math.min(articles.length, currentIndex + 5)
-        ).map((a, i) => {
-          const realIndex = Math.max(0, currentIndex - 4) + i;
-          return (
-            <button
-              key={a.id}
-              onClick={() => goTo(realIndex)}
-              className={`rounded-full transition-all duration-300 ${
-                realIndex === currentIndex
-                  ? "w-2 h-5 bg-blue-500"
-                  : "w-1.5 h-1.5 bg-white/20 hover:bg-white/40"
-              }`}
-            />
-          );
-        })}
+        ))}
       </div>
-
-      {/* Nav arrows */}
-      {currentIndex > 0 && (
-        <button
-          onClick={goPrev}
-          className="absolute top-4 left-1/2 -translate-x-1/2 z-20 p-2 rounded-full bg-black/30 backdrop-blur-sm text-white/60 hover:text-white hover:bg-black/50 transition-all md:hidden"
-        >
-          <ChevronUp className="h-5 w-5" />
-        </button>
-      )}
-      {currentIndex < articles.length - 1 && (
-        <button
-          onClick={goNext}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 p-2 rounded-full bg-black/30 backdrop-blur-sm text-white/60 hover:text-white hover:bg-black/50 transition-all animate-bounce"
-        >
-          <ChevronDown className="h-5 w-5" />
-        </button>
-      )}
-    </div>
+    </>
   );
 }

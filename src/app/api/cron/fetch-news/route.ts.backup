@@ -5,10 +5,15 @@ import type { NewsDataResponse } from "@/lib/types";
 
 const NEWSDATA_BASE_URL = "https://newsdata.io/api/1/latest";
 
-// OPTIMIZED: Fetch each category separately to maximize 200 credits/day limit
-// 10 categories × 24 hours = 240 API calls/day (uses full quota)
-// Each call returns ~10 articles = ~2,400 fresh articles/day
-const CATEGORY_BATCHES = CATEGORIES.map(cat => [cat]);
+// Split categories into batches to minimize API calls while getting good coverage
+// For faster accumulation, you can fetch each category separately (10 batches = ~100 articles/run)
+const CATEGORY_BATCHES = [
+  ["politics", "world", "business", "technology", "science"],
+  ["entertainment", "sports", "health", "environment", "food"],
+];
+
+// Alternative: One category per batch for more articles (uncomment to use)
+// const CATEGORY_BATCHES = CATEGORIES.map(cat => [cat]);
 
 export async function GET(request: NextRequest) {
   // Verify cron secret (supports both header and query param for flexibility)
