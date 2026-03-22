@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/fetch-news?secret=astrolens_cron_secret_2024",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
