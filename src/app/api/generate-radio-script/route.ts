@@ -12,7 +12,7 @@ import type { Article } from "@/lib/types";
  * - API key stored server-side only
  */
 
-const RADIO_SYSTEM_PROMPT = `You are a professional radio news host creating an engaging news broadcast. Your style is:
+const RADIO_SYSTEM_PROMPT = `You are a professional radio news host for "Astrolens Orbit" - a personalized news broadcast. Your style is:
 - Warm, conversational, and energetic
 - Natural transitions between stories
 - Brief context-setting intros for each segment
@@ -20,13 +20,21 @@ const RADIO_SYSTEM_PROMPT = `You are a professional radio news host creating an 
 - Engaging but professional tone
 - Clear pronunciation-friendly language
 
-Format your script with:
-- Opening greeting and overview
-- Category-based segments with smooth transitions
-- Story summaries that are concise but engaging
-- Natural closing
+CRITICAL FORMAT REQUIREMENTS:
+1. ALWAYS start with: "Hello! Today is [DATE]. Welcome to the Astrolens Orbit, your recap for today's top news."
+2. Follow with category-based segments with smooth transitions
+3. Story summaries that are concise but engaging
+4. End with a natural closing
 
-Keep the total length appropriate for the target duration. Use natural speech patterns.`;
+DURATION ACCURACY IS CRITICAL:
+- Average speaking pace is 150 words per minute
+- For a 5-minute script: aim for 750 words
+- For a 10-minute script: aim for 1,500 words
+- For a 15-minute script: aim for 2,250 words
+- Adjust proportionally for other durations
+- This ensures the script matches the target duration when read aloud
+
+Use natural speech patterns and maintain consistent pacing throughout.`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -129,6 +137,20 @@ export async function POST(request: NextRequest) {
       grouped[cat].push(a);
     });
 
+    // Get current date for personalized intro
+    const today = new Date();
+    const dateStr = today.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+
+    // Calculate target word count for accurate duration
+    const targetWords = digest.duration * 150; // 150 words per minute
+    const minWords = Math.floor(targetWords * 0.9); // Allow 10% variance
+    const maxWords = Math.ceil(targetWords * 1.1);
+
     // Build context for AI
     const articlesContext = Object.entries(grouped)
       .map(([category, catArticles]) => {
@@ -139,20 +161,23 @@ export async function POST(request: NextRequest) {
       })
       .join("\n\n");
 
-    const userPrompt = `Create a ${digest.duration}-minute radio news broadcast script from these articles.
+    const userPrompt = `Create a ${digest.duration}-minute radio news broadcast script for Astrolens Orbit from these articles.
+
+TODAY'S DATE: ${dateStr}
 
 ${articlesContext}
 
-Guidelines:
-- Start with a warm greeting and brief overview
-- Group stories by category with smooth transitions
-- Each story should be 20-40 seconds when read aloud
-- Use natural, conversational language
-- Add brief context or connections between related stories
-- End with a friendly sign-off
-- Total script should be appropriate for ${digest.duration} minutes of audio
+CRITICAL REQUIREMENTS:
+1. MUST start with: "Hello! Today is ${dateStr}. Welcome to the Astrolens Orbit, your recap for today's top news."
+2. Target word count: ${targetWords} words (between ${minWords}-${maxWords} words)
+3. This ensures exactly ${digest.duration} minutes when read at 150 words/minute
+4. Group stories by category with smooth transitions
+5. Each story should be 20-40 seconds when read aloud
+6. Use natural, conversational language
+7. Add brief context or connections between related stories
+8. End with a friendly sign-off
 
-Write the complete radio script now:`;
+Write the complete ${digest.duration}-minute radio script now (${targetWords} words):`;
 
     // Call OpenAI API
     const openaiKey = process.env.OPENAI_API_KEY;
