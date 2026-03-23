@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
       .select("*")
       .in("category", categories)
       .order("published_at", { ascending: false })
-      .limit(100); // Fetch more to allow for keyword prioritization
+      .limit(1000); // Fetch all available articles based on user preferences
 
     if (fetchError) {
       console.error("❌ Error reading articles from Supabase:", fetchError);
@@ -76,6 +76,38 @@ export async function GET(request: NextRequest) {
     }
 
     let finalArticles = articles || [];
+
+    // DEDUPLICATION: Remove duplicate articles by article_id and similar titles
+    const seenIds = new Set<string>();
+    const seenTitles = new Set<string>();
+    finalArticles = finalArticles.filter((article) => {
+      // Skip if we've seen this article_id
+      if (seenIds.has(article.article_id)) {
+        console.log(`🔄 Skipping duplicate article_id: ${article.article_id}`);
+        return false;
+      }
+      
+      // Normalize title for similarity check (lowercase, remove punctuation)
+      const normalizedTitle = article.title.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+      
+      // Skip if we've seen a very similar title
+      if (seenTitles.has(normalizedTitle)) {
+        console.log(`🔄 Skipping duplicate title: "${article.title.substring(0, 50)}..."`);
+        return false;
+      }
+      
+      // Filter out articles with very short descriptions (less than 50 characters)
+      if (article.description && article.description.length < 50) {
+        console.log(`⚠️ Skipping article with short description: "${article.title.substring(0, 50)}..."`);
+        return false;
+      }
+      
+      seenIds.add(article.article_id);
+      seenTitles.add(normalizedTitle);
+      return true;
+    });
+
+    console.log(`✨ After deduplication: ${finalArticles.length} unique articles`);
 
     // KEYWORD PRIORITIZATION: Articles matching keywords appear first
     if (user.keywords && user.keywords.length > 0) {
@@ -105,9 +137,7 @@ export async function GET(request: NextRequest) {
       console.log(`⚠️ No keywords set for user - showing articles by recency only`);
     }
 
-    // Limit to 50 articles
-    finalArticles = finalArticles.slice(0, 50);
-
+    // Return all articles based on user preferences (no limit)
     return NextResponse.json({ articles: finalArticles });
   } catch (error) {
     console.error("❌ Exception in /api/news:", error);

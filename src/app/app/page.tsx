@@ -269,17 +269,6 @@ export default function YourSkyPage() {
           WebkitOverflowScrolling: 'touch',
         }}
       >
-        {/* Floating refresh button */}
-        <button
-          onClick={fetchArticles}
-          disabled={loading}
-          className="fixed top-4 left-4 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/10 transition-all group"
-          title="Refresh feed"
-        >
-          <RefreshCw className={`h-5 w-5 text-white ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
-        </button>
-
-        {/* Articles - each is a full-screen snap point */}
         {articles.map((article, index) => (
           <div
             key={article.id}
@@ -334,7 +323,7 @@ export default function YourSkyPage() {
               {/* Dark overlay gradient for text readability */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
 
-              {/* Top bar: counter + time */}
+              {/* Top bar: counter + time + refresh */}
               <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10">
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-1 rounded-full bg-black/50 backdrop-blur-md text-white text-xs font-medium">
@@ -346,37 +335,57 @@ export default function YourSkyPage() {
                     <Clock className="h-3 w-3" />
                     {timeAgo(article.published_at)}
                   </span>
+                  <button
+                    onClick={fetchArticles}
+                    disabled={loading}
+                    className="p-1.5 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md transition-all group"
+                    title="Refresh feed"
+                  >
+                    <RefreshCw className={`h-3 w-3 text-white ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+                  </button>
                 </div>
               </div>
 
-              {/* Side action buttons - TikTok style */}
-              <div className="absolute right-3 bottom-20 flex flex-col gap-4 z-20">
+              {/* Side action buttons - Instagram/TikTok style - smaller and blended */}
+              <div className="absolute right-3 bottom-6 flex flex-col gap-3 z-20">
                 <button
                   onClick={() => handleSave(article.id)}
                   disabled={savingIds.has(article.id)}
-                  className="flex flex-col items-center gap-1 group"
+                  className="flex flex-col items-center gap-0.5 group"
                 >
-                  <div className="p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-all">
+                  <div className="p-2 rounded-full bg-black/20 backdrop-blur-sm hover:bg-black/40 transition-all">
                     {savedIds.has(article.id) ? (
-                      <BookmarkCheck className="h-6 w-6 text-blue-400" />
+                      <BookmarkCheck className="h-5 w-5 text-blue-400" />
                     ) : (
-                      <Bookmark className="h-6 w-6 text-white group-hover:text-blue-400 transition-colors" />
+                      <Bookmark className="h-5 w-5 text-white group-hover:text-blue-400 transition-colors" />
                     )}
                   </div>
-                  <span className="text-white text-xs font-medium">
+                  <span className="text-white text-[10px] font-medium drop-shadow-lg">
                     {savedIds.has(article.id) ? 'Saved' : 'Save'}
                   </span>
                 </button>
 
                 <button
                   onClick={() => handleShare(article)}
-                  className="flex flex-col items-center gap-1 group"
+                  className="flex flex-col items-center gap-0.5 group"
                 >
-                  <div className="p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-all">
-                    <Share2 className="h-6 w-6 text-white group-hover:text-green-400 transition-colors" />
+                  <div className="p-2 rounded-full bg-black/20 backdrop-blur-sm hover:bg-black/40 transition-all">
+                    <Share2 className="h-5 w-5 text-white group-hover:text-green-400 transition-colors" />
                   </div>
-                  <span className="text-white text-xs font-medium">Share</span>
+                  <span className="text-white text-[10px] font-medium drop-shadow-lg">Share</span>
                 </button>
+
+                <a
+                  href={article.article_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col items-center gap-0.5 group"
+                >
+                  <div className="p-2 rounded-full bg-black/20 backdrop-blur-sm hover:bg-black/40 transition-all">
+                    <ExternalLink className="h-5 w-5 text-white group-hover:text-purple-400 transition-colors" />
+                  </div>
+                  <span className="text-white text-[10px] font-medium drop-shadow-lg">Read</span>
+                </a>
               </div>
             </div>
 
@@ -408,21 +417,38 @@ export default function YourSkyPage() {
                 </p>
               </div>
 
-              {/* Bottom actions */}
-              <div className="flex items-center gap-3 mt-4 pt-4 border-t border-white/5">
-                <a
-                  href={article.article_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Read Full Article
-                </a>
-              </div>
             </div>
           </div>
         ))}
+
+        {/* End screen - "You're caught up" */}
+        {articles.length > 0 && (
+          <div
+            className="h-screen w-full relative flex flex-col items-center justify-center bg-[#020617]"
+            style={{
+              scrollSnapAlign: 'start',
+              scrollSnapStop: 'always',
+            }}
+          >
+            <div className="text-center px-6">
+              <div className="text-7xl mb-6">✨</div>
+              <h2 className="text-white text-2xl font-bold mb-3">
+                You&apos;re All Caught Up!
+              </h2>
+              <p className="text-slate-400 text-base mb-8">
+                Seems like you&apos;re caught up with all the news
+              </p>
+              <button
+                onClick={fetchArticles}
+                disabled={loading}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh Feed
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

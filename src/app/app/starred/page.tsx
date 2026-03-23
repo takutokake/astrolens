@@ -4,10 +4,9 @@ import { motion } from "framer-motion";
 import {
   Bookmark,
   ExternalLink,
-  Trash2,
   Loader2,
   Clock,
-  Star,
+  BookmarkCheck,
 } from "lucide-react";
 import { CATEGORY_LABELS, type Category } from "@/lib/types";
 
@@ -81,10 +80,10 @@ export default function StarredPage() {
     <div>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-            <Star className="h-5 w-5 text-amber-400" />
+          <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+            <Bookmark className="h-5 w-5 text-blue-400" />
           </div>
-          Starred Articles
+          Saved Articles
         </h1>
         <p className="text-slate-400 text-sm mt-2 ml-[52px]">
           Your saved stories from across the cosmos.
@@ -95,7 +94,7 @@ export default function StarredPage() {
       {loading && (
         <div className="flex flex-col items-center justify-center py-24">
           <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-4" />
-          <p className="text-slate-400">Loading starred articles...</p>
+          <p className="text-slate-400">Loading saved articles...</p>
         </div>
       )}
 
@@ -103,7 +102,7 @@ export default function StarredPage() {
       {!loading && saved.length === 0 && (
         <div className="text-center py-24">
           <Bookmark className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-          <p className="text-slate-400 text-lg mb-2">No starred articles yet</p>
+          <p className="text-slate-400 text-lg mb-2">No saved articles yet</p>
           <p className="text-slate-500 text-sm">
             Save articles from Your Sky to find them here.
           </p>
@@ -157,10 +156,10 @@ export default function StarredPage() {
                 <button
                   onClick={() => handleRemove(item.article.id, item.id)}
                   disabled={removingIds.has(item.id)}
-                  className="p-2 rounded-md hover:bg-red-500/5 text-slate-500 hover:text-red-400 transition-all"
-                  title="Remove from starred"
+                  className="p-2 rounded-md hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 transition-all"
+                  title="Unsave article"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <BookmarkCheck className="h-4 w-4" />
                 </button>
               </div>
             </div>

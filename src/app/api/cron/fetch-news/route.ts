@@ -64,22 +64,43 @@ export async function GET(request: NextRequest) {
 
       console.log(`✅ Cron: Got ${data.results.length} articles for batch [${batch.join(", ")}]`);
 
-      const articles = data.results.map((item) => ({
-        article_id: item.article_id,
-        title: item.title,
-        description: item.description || "",
-        content: item.content || null,
-        category: item.category?.[0] || batch[0],
-        source_name: item.source_name || "Unknown",
-        source_id: item.source_id || null,
-        image_url: item.image_url || null,
-        article_url: item.link,
-        published_at: item.pubDate || new Date().toISOString(),
-        country: item.country?.[0] || null,
-        language: item.language || "en",
-        sentiment: item.sentiment || null,
-        cache_key: `global:${item.category?.[0] || batch[0]}`,
-      }));
+      const articles = data.results.map((item) => {
+        // Improve description quality: ensure 3-4 sentences minimum
+        let description = item.description || "";
+        
+        // If description is too short (less than 100 chars), try to extract from content
+        if (description.length < 100 && item.content) {
+          // Extract first 3-4 sentences from content
+          const sentences = item.content.match(/[^.!?]+[.!?]+/g) || [];
+          if (sentences.length > 0) {
+            // Take first 3-4 sentences, up to ~300 characters
+            description = sentences.slice(0, 4).join(' ').substring(0, 300).trim();
+            console.log(`📝 Enhanced description for: "${item.title.substring(0, 50)}..."`);
+          }
+        }
+        
+        // If still too short, use title as fallback
+        if (description.length < 50) {
+          description = item.title;
+        }
+        
+        return {
+          article_id: item.article_id,
+          title: item.title,
+          description: description,
+          content: item.content || null,
+          category: item.category?.[0] || batch[0],
+          source_name: item.source_name || "Unknown",
+          source_id: item.source_id || null,
+          image_url: item.image_url || null,
+          article_url: item.link,
+          published_at: item.pubDate || new Date().toISOString(),
+          country: item.country?.[0] || null,
+          language: item.language || "en",
+          sentiment: item.sentiment || null,
+          cache_key: `global:${item.category?.[0] || batch[0]}`,
+        };
+      });
 
       const { data: upserted, error: upsertError } = await supabase
         .from("articles")

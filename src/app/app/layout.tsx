@@ -17,7 +17,7 @@ import {
 const navItems = [
   { href: "/app", label: "Your Sky", icon: Compass },
   { href: "/app/orbit", label: "Create Orbit", icon: Orbit },
-  { href: "/app/starred", label: "Starred", icon: Bookmark },
+  { href: "/app/starred", label: "Saved", icon: Bookmark },
   { href: "/app/settings", label: "Control Panel", icon: Settings },
 ];
 
