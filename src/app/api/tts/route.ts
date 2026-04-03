@@ -105,40 +105,77 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ttsRes = await fetch(
-      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          input: { text: textBody },
-          voice: {
-            languageCode: "en-US",
-            name: "en-US-Casual-K",
-            ssmlGender: "MALE",
-          },
-          audioConfig: {
-            audioEncoding: "MP3",
-            speakingRate: 1.0,
-          },
-        }),
+    // Google TTS has a 5000 byte limit - split into chunks if needed
+    const MAX_BYTES = 4500; // Leave some buffer
+    const textEncoder = new TextEncoder();
+    const chunks: string[] = [];
+    
+    // Split by sentences to avoid cutting mid-sentence
+    const sentences = textBody.match(/[^.!?]+[.!?]+/g) || [textBody];
+    let currentChunk = "";
+    
+    for (const sentence of sentences) {
+      const testChunk = currentChunk + sentence;
+      if (textEncoder.encode(testChunk).length > MAX_BYTES && currentChunk) {
+        chunks.push(currentChunk.trim());
+        currentChunk = sentence;
+      } else {
+        currentChunk = testChunk;
       }
-    );
-
-    if (!ttsRes.ok) {
-      const errText = await ttsRes.text();
-      console.error("Google TTS error:", errText);
-      return NextResponse.json(
-        { error: "TTS generation failed" },
-        { status: 502 }
-      );
+    }
+    if (currentChunk) {
+      chunks.push(currentChunk.trim());
     }
 
-    const ttsData = await ttsRes.json();
-    const audioContent = ttsData.audioContent; // base64 encoded
+    // Generate audio for each chunk
+    const audioChunks: Buffer[] = [];
+    
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      console.log(`Generating TTS chunk ${i + 1}/${chunks.length} (${textEncoder.encode(chunk).length} bytes)`);
+      
+      const ttsRes = await fetch(
+        `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            input: { text: chunk },
+            voice: {
+              languageCode: "en-US",
+              name: "en-US-Casual-K",
+              ssmlGender: "MALE",
+            },
+            audioConfig: {
+              audioEncoding: "MP3",
+              speakingRate: 1.0,
+            },
+          }),
+        }
+      );
 
-    // Decode and upload to Supabase Storage
-    const audioBuffer = Buffer.from(audioContent, "base64");
+      if (!ttsRes.ok) {
+        const errText = await ttsRes.text();
+        console.error("Google TTS error:", {
+          status: ttsRes.status,
+          statusText: ttsRes.statusText,
+          response: errText,
+          chunkIndex: i,
+          chunkSize: textEncoder.encode(chunk).length
+        });
+        return NextResponse.json(
+          { error: `TTS generation failed: ${ttsRes.statusText}` },
+          { status: 502 }
+        );
+      }
+
+      const ttsData = await ttsRes.json();
+      const audioContent = ttsData.audioContent;
+      audioChunks.push(Buffer.from(audioContent, "base64"));
+    }
+
+    // Combine audio chunks
+    const audioBuffer = Buffer.concat(audioChunks);
     const fileName = `${authUser.id}/${digest_id}.mp3`;
 
     const { error: uploadError } = await serviceClient.storage

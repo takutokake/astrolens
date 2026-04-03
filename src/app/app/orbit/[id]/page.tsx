@@ -29,6 +29,7 @@ export default function DigestViewPage() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [radioScript, setRadioScript] = useState<string | null>(null);
   const [generatingAudio, setGeneratingAudio] = useState(false);
+  const [checkingAudio, setCheckingAudio] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -49,6 +50,11 @@ export default function DigestViewPage() {
           setRadioScript(data.digest.radio_script || null);
           setLoading(false);
           sessionStorage.removeItem("currentDigest");
+          
+          // If no audio URL, start checking for it (might be generating in background)
+          if (!data.digest.audio_url) {
+            setCheckingAudio(true);
+          }
           return;
         }
       } catch {}
@@ -70,6 +76,38 @@ export default function DigestViewPage() {
       });
   }, [digestId]);
 
+  // Poll for audio if it's being generated in the background
+  useEffect(() => {
+    if (!checkingAudio || audioUrl) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/digest");
+        if (res.ok) {
+          const data = await res.json();
+          const found = data.digests?.find((d: Digest) => d.id === digestId);
+          if (found?.audio_url) {
+            setAudioUrl(found.audio_url);
+            setRadioScript(found.radio_script || null);
+            setCheckingAudio(false);
+          }
+        }
+      } catch (err) {
+        console.error("Error checking for audio:", err);
+      }
+    }, 3000); // Check every 3 seconds
+
+    // Stop checking after 2 minutes
+    const timeout = setTimeout(() => {
+      setCheckingAudio(false);
+    }, 120000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [checkingAudio, audioUrl, digestId]);
+
   const handleGenerateAudio = async () => {
     setGeneratingAudio(true);
     try {
@@ -78,24 +116,36 @@ export default function DigestViewPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ digest_id: digestId }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setAudioUrl(data.audio_url);
-        
-        // Fetch the updated digest to get the radio script
-        const digestRes = await fetch("/api/digest");
-        if (digestRes.ok) {
-          const digestData = await digestRes.json();
-          const updatedDigest = digestData.digests?.find(
-            (d: any) => d.id === digestId
-          );
-          if (updatedDigest?.radio_script) {
-            setRadioScript(updatedDigest.radio_script);
-          }
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        console.error("TTS API error:", {
+          status: res.status,
+          statusText: res.statusText,
+          error: errorData
+        });
+        alert(`Failed to generate audio: ${errorData.error || res.statusText}`);
+        setGeneratingAudio(false);
+        return;
+      }
+      
+      const data = await res.json();
+      setAudioUrl(data.audio_url);
+      
+      // Fetch the updated digest to get the radio script
+      const digestRes = await fetch("/api/digest");
+      if (digestRes.ok) {
+        const digestData = await digestRes.json();
+        const updatedDigest = digestData.digests?.find(
+          (d: any) => d.id === digestId
+        );
+        if (updatedDigest?.radio_script) {
+          setRadioScript(updatedDigest.radio_script);
         }
       }
     } catch (err) {
       console.error("TTS error:", err);
+      alert("Failed to generate audio. Please try again.");
     }
     setGeneratingAudio(false);
   };
@@ -200,7 +250,7 @@ export default function DigestViewPage() {
         </div>
       )}
 
-      {/* Audio player or Generate button */}
+      {/* Audio player or status */}
       {audioUrl ? (
         <div className="mb-8 p-5 rounded-xl bg-gradient-to-r from-blue-500/5 to-emerald-500/5 border border-blue-500/10">
           <audio
@@ -270,6 +320,16 @@ export default function DigestViewPage() {
             </button>
           </div>
         </div>
+      ) : checkingAudio || generatingAudio ? (
+        <div className="mb-8 p-5 rounded-xl bg-gradient-to-r from-emerald-500/5 to-blue-500/5 border border-emerald-500/10">
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 text-emerald-400 animate-spin" />
+            <div>
+              <p className="text-white text-sm font-medium">Generating radio broadcast...</p>
+              <p className="text-slate-500 text-xs">Creating script and converting to audio (~30-60 seconds)</p>
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="mb-8">
           <Button
@@ -278,17 +338,8 @@ export default function DigestViewPage() {
             variant="outline"
             className="gap-2 border-emerald-500/20 bg-emerald-500/5 text-emerald-400 hover:bg-emerald-500/10"
           >
-            {generatingAudio ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Generating radio broadcast...
-              </>
-            ) : (
-              <>
-                <Headphones className="h-4 w-4" />
-                Generate Radio Broadcast
-              </>
-            )}
+            <Headphones className="h-4 w-4" />
+            Generate Radio Broadcast
           </Button>
           <p className="text-xs text-slate-500 mt-2">
             AI will create a radio script and convert it to audio (takes ~30-60 seconds)

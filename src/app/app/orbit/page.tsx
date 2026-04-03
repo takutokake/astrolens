@@ -87,6 +87,16 @@ export default function CreateOrbitPage() {
 
       const data = await res.json();
 
+      // If mode is listen, trigger TTS generation immediately
+      if (mode === "listen") {
+        // Trigger TTS generation in the background (don't wait)
+        fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ digest_id: data.digest.id }),
+        }).catch((err) => console.error("Background TTS error:", err));
+      }
+
       // Store in sessionStorage for the digest view
       sessionStorage.setItem("currentDigest", JSON.stringify(data));
 
